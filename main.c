@@ -15,8 +15,27 @@ int main()
     );
 
     SDL_Surface *screen = SDL_GetWindowSurface(pwindow);
+    SDL_Surface *image = SDL_LoadBMP("test.bmp");
+    if (!image)
+    {
+        printf("Unable to load image %s! SDL Error: %s\n", image, SDL_GetError());
+        SDL_Delay(30000);
+        return 1;
+    } else
+    {
+        SDL_BlitSurface(image, NULL, screen, NULL);
+        SDL_UpdateWindowSurface(pwindow);
+    }
+
+    SDL_BlitSurface (image, NULL, screen, NULL);
+    SDL_UpdateWindowSurface(pwindow);
+
     Uint32 white = SDL_MapRGB(screen->format, 255, 255, 255);
     SDL_FillRect(screen, NULL, white);
+    if (image)
+    {
+        SDL_BlitSurface(image, NULL, screen, NULL);
+    }
     SDL_UpdateWindowSurface(pwindow);
 
     int running = 1;
@@ -27,11 +46,20 @@ int main()
             if (event.type == SDL_QUIT) {
                 running = 0;
             }
+            else if (event.type == SDL_KEYDOWN)
+            {
+                if (event.key.keysym.sym == SDLK_ESCAPE)
+                {
+                    running = 0;
+                }
+            }
         }
         SDL_Delay(16); // ~60 FPS, prevents CPU burn
     }
-
+    SDL_FreeSurface(image);
     SDL_DestroyWindow(pwindow);
     SDL_Quit();
     return 0;
+
+
 }
