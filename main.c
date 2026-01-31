@@ -21,23 +21,32 @@ int main()
         printf("Unable to load image %s! SDL Error: %s\n", image, SDL_GetError());
         SDL_Delay(30000);
         return 1;
-    } else
-    {
-        SDL_BlitSurface(image, NULL, screen, NULL);
-        SDL_UpdateWindowSurface(pwindow);
     }
+    SDL_Surface *image2 = SDL_LoadBMP("test.bmp");
 
-    SDL_BlitSurface (image, NULL, screen, NULL);
-    SDL_UpdateWindowSurface(pwindow);
-
-    Uint32 white = SDL_MapRGB(screen->format, 255, 255, 255);
+    //Clear Background
+    Uint32 white = SDL_MapRGB(image->format, 255, 255, 255);
     SDL_FillRect(screen, NULL, white);
-    if (image)
-    {
-        SDL_BlitSurface(image, NULL, screen, NULL);
-    }
-    SDL_UpdateWindowSurface(pwindow);
 
+    //Compute scale to fit window.
+    float scale_x = (float)screen->w / image->w;
+    float scale_y = (float)screen->h / image->h;
+    float scale = scale_x < scale_y ? scale_x : scale_y;
+
+    //Scaled size.
+    int draw_w = (int)(image->w * scale);
+    int draw_h = (int)(image->h * scale);
+
+    //Centering the image.
+    SDL_Rect dst;
+    dst.w = image->w;
+    dst.h = image->h;
+    dst.x = (screen->w - image->w) / 2;
+    dst.y = (screen->h - image->h) / 2;
+
+    //Drawing image
+    SDL_BlitSurface(image, NULL, screen, &dst);
+    SDL_UpdateWindowSurface(pwindow);
     int running = 1;
     SDL_Event event;
 
