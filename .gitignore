@@ -1,0 +1,7 @@
+# CLion / CMake
+cmake-build-*/
+.idea/
+
+# Compiled binaries
+main
+*.out
