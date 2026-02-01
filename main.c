@@ -1,162 +1,181 @@
 #include <SDL2/SDL.h>
 #include <stdio.h>
-#include <stdlib.h>
 
-void draw_image(SDL_Window *window, SDL_Surface *image, float zoom, float pan_x, float pan_y)
-{
-    SDL_Surface *screen = SDL_GetWindowSurface(window);
-    Uint32 white = SDL_MapRGB(screen->format, 255, 255, 255);
-    SDL_FillRect(screen, NULL, white);
+/* =========================
+   UI CONSTANTS
+   ========================= */
+#define TOOLBAR_HEIGHT 80
+#define BTN_SIZE 48
+#define BTN_PADDING 16
 
-    float scale_x = (float)screen->w / image->w;
-    float scale_y = (float)screen->h / image->h;
-    float fit_scale = scale_x < scale_y ? scale_x : scale_y;
-    float scale = fit_scale * zoom;
-
-    int draw_w = (int)(image->w * scale);
-    int draw_h = (int)(image->h * scale);
-
-    SDL_Rect dst;
-    dst.w = draw_w;
-    dst.h = draw_h;
-    dst.x = (screen->w - draw_w) / 2 + (int)pan_x;
-    dst.y = (screen->h - draw_h) / 2 + (int)pan_y;
-
-    SDL_BlitScaled(image, NULL, screen, &dst);
-    SDL_UpdateWindowSurface(window);
+/* =========================
+   ICON DRAWING
+   ========================= */
+void draw_plus(SDL_Renderer *r, SDL_Rect b) {
+    SDL_RenderDrawLine(r, b.x + b.w/2, b.y + 8, b.x + b.w/2, b.y + b.h - 8);
+    SDL_RenderDrawLine(r, b.x + 8, b.y + b.h/2, b.x + b.w - 8, b.y + b.h/2);
 }
 
+void draw_minus(SDL_Renderer *r, SDL_Rect b) {
+    SDL_RenderDrawLine(r, b.x + 8, b.y + b.h/2, b.x + b.w - 8, b.y + b.h/2);
+}
 
-int main()
+void draw_reset(SDL_Renderer *r, SDL_Rect b) {
+    SDL_RenderDrawLine(r, b.x + 10, b.y + 10, b.x + b.w - 10, b.y + b.h - 10);
+    SDL_RenderDrawLine(r, b.x + b.w - 10, b.y + 10, b.x + 10, b.y + b.h - 10);
+}
+
+/* =========================
+   RENDER
+   ========================= */
+void render(
+    SDL_Renderer *r,
+    SDL_Texture *tex,
+    int iw, int ih,
+    float zoom, float px, float py,
+    SDL_Rect zin, SDL_Rect zout, SDL_Rect reset,
+    SDL_Point mouse
+) {
+    int ww, wh;
+    SDL_GetRendererOutputSize(r, &ww, &wh);
+
+    /* Background */
+    SDL_SetRenderDrawColor(r, 245, 245, 245, 255);
+    SDL_RenderClear(r);
+
+    /* Image */
+    float sx = (float)ww / iw;
+    float sy = (float)(wh - TOOLBAR_HEIGHT) / ih;
+    float s = (sx < sy ? sx : sy) * zoom;
+
+    SDL_Rect img = {
+        (ww - iw * s) / 2 + px,
+        TOOLBAR_HEIGHT + (wh - TOOLBAR_HEIGHT - ih * s) / 2 + py,
+        iw * s,
+        ih * s
+    };
+
+    SDL_RenderCopy(r, tex, NULL, &img);
+
+    /* Toolbar */
+    SDL_Rect bar = {0, 0, ww, TOOLBAR_HEIGHT};
+    SDL_SetRenderDrawColor(r, 60, 60, 60, 255);
+    SDL_RenderFillRect(r, &bar);
+
+    /* Buttons */
+    SDL_Rect btns[3] = { zin, zout, reset };
+
+    for (int i = 0; i < 3; i++) {
+        int hover = SDL_PointInRect(&mouse, &btns[i]);
+
+        SDL_SetRenderDrawColor(
+            r,
+            hover ? 120 : 90,
+            hover ? 120 : 90,
+            hover ? 120 : 90,
+            255
+        );
+        SDL_RenderFillRect(r, &btns[i]);
+
+        SDL_SetRenderDrawColor(r, 255, 255, 255, 255);
+        SDL_RenderDrawRect(r, &btns[i]);
+    }
+
+    /* Icons */
+    draw_plus(r, zin);
+    draw_minus(r, zout);
+    draw_reset(r, reset);
+
+    SDL_RenderPresent(r);
+}
+
+/* =========================
+   MAIN
+   ========================= */
+int main(void)
 {
     SDL_Init(SDL_INIT_VIDEO);
-    float zoom = 1.0f;
-    float pan_x = 0.0f;
-    float pan_y = 0.0f;
 
-    int dragging = 0;
-    int last_mouse_x = 0;
-    int last_mouse_y = 0;
+    float zoom = 1.0f, px = 0, py = 0;
+    int dragging = 0, lx = 0, ly = 0;
+    SDL_Point mouse = {0,0};
 
-    SDL_Window *pwindow = SDL_CreateWindow(
+    SDL_Window *w = SDL_CreateWindow(
         "Imgbuf",
-        SDL_WINDOWPOS_CENTERED,
-        SDL_WINDOWPOS_CENTERED,
-        900,
-        600,
+        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+        900, 600,
         SDL_WINDOW_RESIZABLE
     );
 
-    SDL_Surface *image = SDL_LoadBMP("test.bmp");
-    if (!image)
-    {
-        printf("Unable to load image! SDL Error: %s\n", SDL_GetError());
-        SDL_Delay(30000);
-        return 1;
-    }
+    SDL_Renderer *r = SDL_CreateRenderer(
+        w, -1,
+        SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC
+    );
 
-    draw_image(pwindow, image,zoom, pan_x, pan_y);
-    int running = 1;
-    SDL_Event event;
+    SDL_Surface *s = SDL_LoadBMP("test.bmp");
+    SDL_Surface *img = SDL_ConvertSurfaceFormat(s, SDL_PIXELFORMAT_RGBA32, 0);
+    SDL_FreeSurface(s);
 
+    SDL_Texture *tex = SDL_CreateTextureFromSurface(r, img);
+    SDL_FreeSurface(img);
 
-    while (running) {
-        while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_QUIT) {
-                running = 0;
-            }
-            else if (event.type == SDL_KEYDOWN)
-            {
+    SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_NONE);
 
-                if (event.key.keysym.sym == SDLK_ESCAPE)
-                {
-                    running = 0;
-                }
-                else if (
-    event.key.keysym.sym == SDLK_KP_PLUS ||
-    event.key.keysym.sym == SDLK_EQUALS  ||
-    event.key.keysym.sym == SDLK_PLUS
-)
-                {
-                    zoom *= 1.1f;
-                    if (zoom > 10.0f) zoom = 10.0f;
-                    draw_image(pwindow, image, zoom, pan_x, pan_y);
-                }
-                else if (
-                    event.key.keysym.sym == SDLK_KP_MINUS ||
-                    event.key.keysym.sym == SDLK_MINUS
-                )
-                {
-                    zoom /= 1.1f;
-                    if (zoom < 0.1f) zoom = 0.1f;
-                    draw_image(pwindow, image, zoom, pan_x,pan_y);
-                }
+    int iw, ih;
+    SDL_QueryTexture(tex, NULL, NULL, &iw, &ih);
 
-            }
-            else if (event.type == SDL_WINDOWEVENT)
-            {
-                if (event.window.event == SDL_WINDOWEVENT_RESIZED)
-                {
-                    draw_image(pwindow, image,zoom, pan_x, pan_y);
-                }
-            }
-            else if (event.type == SDL_MOUSEWHEEL)
-            {
-                if (event.wheel.y > 0) {        // scroll up
-                    zoom *= 1.1f;
-                }
-                else if (event.wheel.y < 0) {   // scroll down
-                    zoom /= 1.1f;
-                }
+    SDL_Rect zin  = { BTN_PADDING, 16, BTN_SIZE, BTN_SIZE };
+    SDL_Rect zout = { BTN_PADDING*2 + BTN_SIZE, 16, BTN_SIZE, BTN_SIZE };
+    SDL_Rect rst  = { BTN_PADDING*3 + BTN_SIZE*2, 16, BTN_SIZE, BTN_SIZE };
 
-                // clamp zoom
-                if (zoom < 0.1f) zoom = 0.1f;
-                if (zoom > 10.0f) zoom = 10.0f;
+    SDL_Event e;
+    int run = 1;
 
-                draw_image(pwindow, image, zoom, pan_x, pan_y);
-            }
-            else if (event.type == SDL_MOUSEBUTTONDOWN)
-            {
-                if (event.button.button == SDL_BUTTON_LEFT)
-                {
-                    dragging = 1;
-                    last_mouse_x = event.button.x;
-                    last_mouse_y = event.button.y;
-                }
-            }
-            else if (event.type == SDL_MOUSEBUTTONUP)
-            {
-                if (event.button.button == SDL_BUTTON_LEFT)
-                {
-                    dragging = 0;
-                }
-            }
-            else if (event.type == SDL_MOUSEMOTION)
-            {
-                if (dragging)
-                {
-                    int dx = event.motion.x - last_mouse_x;
-                    int dy = event.motion.y - last_mouse_y;
+    while (run) {
+        while (SDL_PollEvent(&e)) {
 
-                    pan_x += dx;
-                    pan_y += dy;
+            if (e.type == SDL_QUIT) run = 0;
 
-                    last_mouse_x = event.motion.x;
-                    last_mouse_y = event.motion.y;
-
-                    draw_image(pwindow, image, zoom, pan_x, pan_y);
+            else if (e.type == SDL_MOUSEMOTION) {
+                mouse = (SDL_Point){e.motion.x, e.motion.y};
+                if (dragging) {
+                    px += e.motion.x - lx;
+                    py += e.motion.y - ly;
+                    lx = e.motion.x;
+                    ly = e.motion.y;
                 }
             }
 
+            else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+                dragging = 1;
+                lx = e.button.x;
+                ly = e.button.y;
+            }
 
+            else if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                dragging = 0;
+                SDL_Point p = {e.button.x, e.button.y};
+
+                if (SDL_PointInRect(&p, &zin)) zoom *= 1.1f;
+                else if (SDL_PointInRect(&p, &zout)) zoom /= 1.1f;
+                else if (SDL_PointInRect(&p, &rst)) zoom = 1.0f, px = py = 0;
+            }
+
+            else if (e.type == SDL_MOUSEWHEEL) {
+                zoom *= (e.wheel.y > 0) ? 1.1f : 0.9f;
+            }
         }
 
-        SDL_Delay(16); // ~60 FPS, prevents CPU burn
+        if (zoom < 0.1f) zoom = 0.1f;
+        if (zoom > 10.0f) zoom = 10.0f;
+
+        render(r, tex, iw, ih, zoom, px, py, zin, zout, rst, mouse);
+        SDL_Delay(16);
     }
-    SDL_FreeSurface(image);
-    SDL_DestroyWindow(pwindow);
+
+    SDL_DestroyTexture(tex);
+    SDL_DestroyRenderer(r);
+    SDL_DestroyWindow(w);
     SDL_Quit();
     return 0;
-
-
 }
