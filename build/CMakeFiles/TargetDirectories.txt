@@ -1,3 +1,0 @@
-/home/nikhil/CLionProjects/imgbuf/build/CMakeFiles/imgbuf.dir
-/home/nikhil/CLionProjects/imgbuf/build/CMakeFiles/edit_cache.dir
-/home/nikhil/CLionProjects/imgbuf/build/CMakeFiles/rebuild_cache.dir
